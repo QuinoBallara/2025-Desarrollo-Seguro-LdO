@@ -8,8 +8,8 @@ Guía para configurar el ambiente, levantar los servicios, cargar datos de ejemp
 ## 📋 Prerrequisitos
 - **Docker Desktop**
 - **Puertos libres**:
-  - 3001 → Frontend
-  - 3000 → Backend
+  - 3000 → Frontend
+  - 5000 → Backend
   - 5432 → PostgreSQL
   - 8025 → Mailhog
   - 1025 → emulador de SMTP

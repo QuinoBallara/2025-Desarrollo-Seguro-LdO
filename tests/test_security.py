@@ -58,9 +58,6 @@ def setup_create_user():
 
     return [username,password]
 
-
-
-
 def test_login(setup_create_user):
     username = setup_create_user[0]
     password = setup_create_user[1]
@@ -68,3 +65,4 @@ def test_login(setup_create_user):
     response = requests.post("http://localhost:5000/auth/login", json={"username": username, "password": password})
     auth_token = response.json()["token"]
     assert auth_token
+
