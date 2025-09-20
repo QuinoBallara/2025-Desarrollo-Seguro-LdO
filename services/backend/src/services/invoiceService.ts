@@ -14,6 +14,9 @@ interface InvoiceRow {
 }
 
 class InvoiceService {
+  
+  private static readonly ALLOWED_PAYMENT_BRANDS = ['visa', 'mastercard', 'amex', 'paypal'];
+
   static async list( userId: string, status?: string, operator?: string): Promise<Invoice[]> {
     let q = db<InvoiceRow>('invoices').where({ userId: userId });
     if (status) q = q.andWhereRaw(" status "+ operator + " '"+ status +"'");
@@ -36,6 +39,11 @@ class InvoiceService {
     ccv: string,
     expirationDate: string
   ) {
+    
+    if (!InvoiceService.ALLOWED_PAYMENT_BRANDS.includes(paymentBrand.toLowerCase())) {
+      throw new Error('Invalid payment brand');
+    }
+
     // use axios to call http://paymentBrand/payments as a POST request
     // with the body containing ccNumber, ccv, expirationDate
     // and handle the response accordingly
