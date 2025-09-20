@@ -68,16 +68,3 @@ def test_login(setup_create_user):
     response = requests.post("http://localhost:5000/auth/login", json={"username": username, "password": password})
     auth_token = response.json()["token"]
     assert auth_token
-
-
-    '''
-    # SQLi en operator
-    auth_token = setup_token
-    response = requests.get("http://localhost:5000/invoices", 
-                    headers={"Authorization": f"Bearer {auth_token}"},
-                    params={"operator": " = 'a' UNION SELECT 1 ,1,1, NOW(),'a' -- ", "status": "paid" }) # 
-    invoices = response.json()
-
-    assert len(invoices) == 1
-    '''
-    
