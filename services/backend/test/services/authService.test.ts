@@ -189,7 +189,7 @@ describe('AuthService.generateJwt', () => {
     mockedDb.mockReturnValueOnce(getUserChain as any);
 
     // Call the method to test
-    await expect(AuthService.authenticate('username', 'password123')).rejects.toThrow('Invalid email or not activated');
+    await expect(AuthService.authenticate('username', 'password123')).rejects.toThrow('Invalid username or not activated');
   });
 
   it('sendResetPasswordEmail', async () => {
@@ -317,7 +317,8 @@ describe('AuthService.generateJwt', () => {
     expect(updateChain.update).toHaveBeenCalledWith({
       password: password,
       invite_token: null,
-      invite_token_expires: null
+      invite_token_expires: null,
+      activated:true
     });
 
     expect(updateChain.where).toHaveBeenCalledWith({ id: user_id });
