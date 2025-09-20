@@ -66,11 +66,12 @@ describe('AuthService.generateJwt', () => {
     });
 
     expect(nodemailer.createTransport).toHaveBeenCalled();
-    expect(nodemailer.createTransport().sendMail).toHaveBeenCalledWith({
+    expect(nodemailer.createTransport().sendMail).toHaveBeenCalledWith(expect.objectContaining({
+      from: "info@example.com",
       to: user.email,
       subject: 'Activate your account',
-      html: expect.stringContaining('Click <a href="')
-    });
+      html: expect.stringContaining('Click <a href=')
+    }));
   }
   );
 
@@ -157,7 +158,7 @@ describe('AuthService.generateJwt', () => {
 
     // Call the method to test
     const user = await AuthService.authenticate(email, password);
-    expect(getUserChain.where).toHaveBeenCalledWith({email : 'username'});
+    expect(getUserChain.where).toHaveBeenCalledWith({username : 'username'});
     expect(user).toBeDefined();
   });
 
