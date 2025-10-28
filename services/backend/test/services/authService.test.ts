@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
+import bcrypt from 'bcrypt';
 
 import AuthService from '../../src/services/authService';
 import db from '../../src/db';
@@ -12,6 +13,10 @@ const mockedDb = db as jest.MockedFunction<typeof db>
 jest.mock('nodemailer');
 const mockedNodemailer = nodemailer as jest.Mocked<typeof nodemailer>;
 
+// mock bcrypt
+jest.mock('bcrypt');
+const mockedBcrypt = bcrypt as jest.Mocked<typeof bcrypt>;
+
 // mock send email function
 mockedNodemailer.createTransport = jest.fn().mockReturnValue({
   sendMail: jest.fn().mockResolvedValue({ success: true }),
@@ -19,10 +24,9 @@ mockedNodemailer.createTransport = jest.fn().mockReturnValue({
 
 describe('AuthService.generateJwt', () => {
   const OLD_ENV = process.env;
-  beforeEach (() => {
+  beforeEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
-
   });
 
   it('createUser', async () => {
@@ -34,6 +38,9 @@ describe('AuthService.generateJwt', () => {
       last_name: 'Last',
       username: 'username',
     } as User;
+
+    const hashedPassword = 'hashed_password123';
+    mockedBcrypt.hash = jest.fn().mockResolvedValue(hashedPassword);
 
     // mock no user exists
     const selectChain = {
@@ -53,10 +60,13 @@ describe('AuthService.generateJwt', () => {
     // Call the method to test
     await AuthService.createUser(user);
 
+    // Verify bcrypt.hash was called
+    expect(mockedBcrypt.hash).toHaveBeenCalledWith(user.password, 10);
+
     // Verify the database calls
     expect(insertChain.insert).toHaveBeenCalledWith({
       email: user.email,
-      password: user.password,
+      password: hashedPassword,
       first_name: user.first_name,
       last_name: user.last_name,
       username: user.username,
@@ -104,24 +114,38 @@ describe('AuthService.generateJwt', () => {
       last_name: 'NewLast',
       username: 'newusername',
     } as User;
+
+    const hashedPassword = 'hashed_newpassword123';
+    mockedBcrypt.hash = jest.fn().mockResolvedValue(hashedPassword);
+
     // mock user exists
     const selectChain = {
       where: jest.fn().mockReturnThis(),
-      first: jest.fn().mockResolvedValue({ id: user.id }) // Existing user found
+      first: jest.fn().mockResolvedValue({ id: user.id, password: 'old_hashed_password' }) // Existing user found
     };
     // Mock the database update
     const updateChain = {
       where: jest.fn().mockReturnThis(),
-      update: jest.fn().mockResolvedValue(user) // Update successful
+      update: jest.fn().mockResolvedValue(1) // Update successful
     };
     mockedDb
       .mockReturnValueOnce(selectChain as any)
       .mockReturnValueOnce(updateChain as any);
     // Call the method to test
     const updatedUser = await AuthService.updateUser(user);
+    
+    // Verify bcrypt.hash was called
+    expect(mockedBcrypt.hash).toHaveBeenCalledWith(user.password, 10);
+    
     // Verify the database calls
     expect(selectChain.where).toHaveBeenCalledWith({ id: user.id });
-    expect(updateChain.update).toHaveBeenCalled();
+    expect(updateChain.update).toHaveBeenCalledWith({
+      username: user.username,
+      password: hashedPassword,
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name
+    });
   });
 
   it('updateUser not found', async () => {
@@ -146,31 +170,39 @@ describe('AuthService.generateJwt', () => {
   it('authenticate', async () => {
     const email = 'username';
     const password = 'password123';
+    const hashedPassword = 'hashed_password123';
+
+    // Mock bcrypt.compare to return true (password matches)
+    mockedBcrypt.compare = jest.fn().mockResolvedValue(true);
 
     // Mock the database get user
     const getUserChain = {
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
-      first: jest.fn().mockResolvedValue({password}),
+      first: jest.fn().mockResolvedValue({ username: email, password: hashedPassword }),
     };
-    // Mock the database update password
     mockedDb.mockReturnValueOnce(getUserChain as any);
 
     // Call the method to test
     const user = await AuthService.authenticate(email, password);
-    expect(getUserChain.where).toHaveBeenCalledWith({username : 'username'});
+    
+    expect(getUserChain.where).toHaveBeenCalledWith({ username: 'username' });
+    expect(mockedBcrypt.compare).toHaveBeenCalledWith(password, hashedPassword);
     expect(user).toBeDefined();
   });
 
   it('authenticate wrong pass', async () => {
+    const hashedPassword = 'hashed_password123';
+    
+    // Mock bcrypt.compare to return false (password doesn't match)
+    mockedBcrypt.compare = jest.fn().mockResolvedValue(false);
 
     // Mock the database get user
     const getUserChain = {
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
-      first: jest.fn().mockResolvedValue({password:'otherpassword'}),
+      first: jest.fn().mockResolvedValue({ password: hashedPassword }),
     };
-    // Mock the database update password
     mockedDb.mockReturnValueOnce(getUserChain as any);
 
     // Call the method to test
@@ -185,11 +217,10 @@ describe('AuthService.generateJwt', () => {
       andWhere: jest.fn().mockReturnThis(),
       first: jest.fn().mockResolvedValue(null),
     };
-    // Mock the database update password
     mockedDb.mockReturnValueOnce(getUserChain as any);
 
     // Call the method to test
-    await expect(AuthService.authenticate('username', 'password123')).rejects.toThrow('Invalid username or not activated');
+    await expect(AuthService.authenticate('username', 'password123')).rejects.toThrow('Invalid email or not activated');
   });
 
   it('sendResetPasswordEmail', async () => {
@@ -244,12 +275,16 @@ describe('AuthService.generateJwt', () => {
 
   it('resetPassword', async () => {
     const token = 'valid-token';
-    const newPassword = 'newpassword123';    
+    const newPassword = 'newpassword123';
+    const hashedPassword = 'hashed_newpassword123';
+    
+    mockedBcrypt.hash = jest.fn().mockResolvedValue(hashedPassword);
+    
     // Mock the database get user
     const getUserChain = {
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
-      first: jest.fn().mockResolvedValue({id: 'user-123'}),
+      first: jest.fn().mockResolvedValue({ id: 'user-123' }),
     };
     // Mock the database update password
     const updateChain = {
@@ -261,9 +296,11 @@ describe('AuthService.generateJwt', () => {
       .mockReturnValueOnce(updateChain as any);
     // Call the method to test
     await AuthService.resetPassword(token, newPassword);
+    
     expect(getUserChain.where).toHaveBeenCalledWith('reset_password_token', token);
+    expect(mockedBcrypt.hash).toHaveBeenCalledWith(newPassword, 10);
     expect(updateChain.update).toHaveBeenCalledWith({
-      password: newPassword,
+      password: hashedPassword,
       reset_password_token: null,
       reset_password_expires: null
     });
@@ -284,8 +321,12 @@ describe('AuthService.generateJwt', () => {
 
   it('setInitialPassword', async () => {
     const password = 'whatawonderfulpassword';
+    const hashedPassword = 'hashed_whatawonderfulpassword';
     const user_id = 'user-123';
     const token = 'invite-token';
+    
+    mockedBcrypt.hash = jest.fn().mockResolvedValue(hashedPassword);
+    
     // Mock the database row
     const mockRow = {
       id: user_id,
@@ -313,12 +354,15 @@ describe('AuthService.generateJwt', () => {
     // Call the method to test
     await AuthService.setPassword(token, password);
 
+    // Verify bcrypt.hash was called
+    expect(mockedBcrypt.hash).toHaveBeenCalledWith(password, 10);
+    
     // Verify the database calls
     expect(updateChain.update).toHaveBeenCalledWith({
-      password: password,
+      password: hashedPassword,
       invite_token: null,
       invite_token_expires: null,
-      activated:true
+      activated: true
     });
 
     expect(updateChain.where).toHaveBeenCalledWith({ id: user_id });
