@@ -381,6 +381,54 @@ describe('AuthService.generateJwt', () => {
     await expect(AuthService.setPassword('invalid-token', 'newpassword123')).rejects.toThrow('Invalid or expired invite token');
   });
 
+  // TEST FOR TEMPLATE INJECTION MITIGATION
+  it('createUser - should prevent EJS template injection in first_name and last_name', async () => {
+    const user = {
+      id: 'user-456',
+      email: 'malicious@example.com',
+      password: 'password123',
+      first_name: '<%= 7*7 %>',
+      last_name: '<%= 7*7 %>',
+      username: 'badguy',
+    } as User;
+
+    // mock no user exists
+    const selectChain = {
+      where: jest.fn().mockReturnThis(),
+      orWhere: jest.fn().mockReturnThis(),
+      first: jest.fn().mockResolvedValue(null)
+    };
+    const insertChain = {
+      returning: jest.fn().mockResolvedValue([user]),
+      insert: jest.fn().mockReturnThis()
+    };
+    
+    const mockSendMail = jest.fn().mockResolvedValue({ success: true });
+    mockedNodemailer.createTransport = jest.fn().mockReturnValue({
+      sendMail: mockSendMail,
+    } as any);
+
+    mockedDb
+      .mockReturnValueOnce(selectChain as any)
+      .mockReturnValueOnce(insertChain as any);
+
+    await AuthService.createUser(user);
+
+    // Verify that sendMail was called
+    expect(mockSendMail).toHaveBeenCalled();
+    
+    const mailOptions = mockSendMail.mock.calls[0][0];
+    const htmlContent = mailOptions.html;
+
+
+    // It should appear as text "<%= 7*7 %>" not as "49"
+    expect(htmlContent).toContain('&lt;%= 7*7 %&gt;');
+    
+    // Verify the email structure is still valid
+    expect(htmlContent).toContain('<h1>Hello');
+    expect(htmlContent).toContain('</h1>');
+  });
+
   it('generateJwt', () => {
     const userId = 'abcd-1234';
     const token = AuthService.generateJwt(userId);
@@ -395,3 +443,5 @@ describe('AuthService.generateJwt', () => {
   });
 
 });
+
+
