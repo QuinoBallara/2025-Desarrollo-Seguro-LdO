@@ -19,7 +19,14 @@ class InvoiceService {
 
   static async list( userId: string, status?: string, operator?: string): Promise<Invoice[]> {
     let q = db<InvoiceRow>('invoices').where({ userId: userId });
-    if (status) q = q.andWhereRaw(" status "+ operator + " '"+ status +"'");
+    if (status) {
+      // Validate the operator to ensure it's one of the allowed comparison operators
+      const allowedOperators = ['=', '<>', '>', '<', '>=', '<=', 'LIKE'];
+      const safeOperator = allowedOperators.includes(operator) ? operator : '=';
+
+      // Use Knex's where method instead of raw SQL
+      q = q.where('status', safeOperator, status);
+    }
     const rows = await q.select();
     const invoices = rows.map(row => ({
       id: row.id,
