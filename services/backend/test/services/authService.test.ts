@@ -382,7 +382,14 @@ describe('AuthService.generateJwt', () => {
   });
 
   // TEST FOR TEMPLATE INJECTION MITIGATION
+  // este test verifica que no se pueda hacer inyeccion de plantillas (template injection)
+  // a traves de los campos first_name y last_name cuando se crea un usuario
+  // la vulnerabilidad ocurriria si el sistema renderiza estos campos directamente
+  // sin escapar correctamente el contenido
   it('createUser - should prevent EJS template injection in first_name and last_name', async () => {
+    // creamos un usuario con injections en first_name y last_name
+    // <%= 7*7 %> es si se ejecutara devolveria "49"
+    // lo que queremos es que no se ejecute y aparezca como texto plano
     const user = {
       id: 'user-456',
       email: 'malicious@example.com',
@@ -392,39 +399,48 @@ describe('AuthService.generateJwt', () => {
       username: 'badguy',
     } as User;
 
-    // mock no user exists
+    // mockeamos la base de datos para simular que no existe un usuario previo
     const selectChain = {
       where: jest.fn().mockReturnThis(),
       orWhere: jest.fn().mockReturnThis(),
       first: jest.fn().mockResolvedValue(null)
     };
+    // mockeamos la insercion del usuario en la bd
     const insertChain = {
       returning: jest.fn().mockResolvedValue([user]),
       insert: jest.fn().mockReturnThis()
     };
     
+    // mockeamos nodemailer para capturar el email que se envia
+    // esto nos permite verificar el contenido html del email sin enviarlo realmente
     const mockSendMail = jest.fn().mockResolvedValue({ success: true });
     mockedNodemailer.createTransport = jest.fn().mockReturnValue({
       sendMail: mockSendMail,
     } as any);
 
+    // configuramos los mocks en el orden que se van a llamar
     mockedDb
       .mockReturnValueOnce(selectChain as any)
       .mockReturnValueOnce(insertChain as any);
 
+    // ejecutamos la creacion del usuario que envia el email
     await AuthService.createUser(user);
 
-    // Verify that sendMail was called
+    // verificamos que se llamo a sendMail
     expect(mockSendMail).toHaveBeenCalled();
     
+    // extraemos las opciones del email que se envio
     const mailOptions = mockSendMail.mock.calls[0][0];
     const htmlContent = mailOptions.html;
 
 
-    // It should appear as text "<%= 7*7 %>" not as "49"
+    // &lt; y &gt; son las entidades HTML para < y >
+    // si vemos "&lt;%= 7*7 %&gt;" significa que se escapo correctamente
+    // si apareciera "49" significaria que el template se ejecuto
     expect(htmlContent).toContain('&lt;%= 7*7 %&gt;');
     
-    // Verify the email structure is still valid
+    // ademas verificamos que la estructura general del email siga siendo valida
+    // esto asegura que el escapado no rompio el formato del email
     expect(htmlContent).toContain('<h1>Hello');
     expect(htmlContent).toContain('</h1>');
   });
