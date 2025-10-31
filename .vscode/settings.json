@@ -1,5 +1,13 @@
 {
   "testing.automaticallyOpenPeekView": "never",
   "jest.runMode": "on-demand",
-  "python.testing.pytestEnabled": true
+  "jest.rootPath": "services/backend",
+  "jest.nodeEnv": {
+    "NODE_ENV": "test"
+  },
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestArgs": [
+    "tests"
+  ]
 }

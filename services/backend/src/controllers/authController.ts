@@ -141,8 +141,10 @@ export const deletePicture = async (req: Request, res: Response, next: NextFunct
 };
 
 */
-
-
+const validateToken = async (req: Request, res: Response, next: NextFunction) => {
+  // If we reach here, the auth middleware has already validated the token
+  res.json({ valid: true, user: (req as any).user });
+};
 
 export default {
   ping,
@@ -152,4 +154,5 @@ export default {
   setPassword,
   createUser,
   updateUser,
+  validateToken,
 };
